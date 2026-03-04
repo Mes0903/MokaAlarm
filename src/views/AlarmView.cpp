@@ -329,6 +329,8 @@ void AlarmView::renderSettingsDialog_()
 		pendingChromePath_	= s.chrome_path;
 		pendingCloseTray_		= s.close_to_tray;
 		pendingShowHint_		= !s.suppress_minimize_hint;
+		std::strncpy(pendingDefaultUrl_, s.default_youtube_url.c_str(), sizeof(pendingDefaultUrl_) - 1);
+		pendingDefaultUrl_[sizeof(pendingDefaultUrl_) - 1] = '\0';
 		open								= true;
 	}
 
@@ -403,6 +405,21 @@ void AlarmView::renderSettingsDialog_()
 	ImGui::Separator();
 	ImGui::Spacing();
 
+	// ── Default YouTube URL ───────────────────────────────────────────────
+	ImGui::Text("Default YouTube URL");
+	ImGui::SetNextItemWidth(-1.0f);
+	ImGui::InputText("##defaultUrl", pendingDefaultUrl_, sizeof(pendingDefaultUrl_));
+	ImGui::Spacing();
+	if (ImGui::Button("Reset to Default##url")) {
+		const std::string &def = model::SettingsModel{}.default_youtube_url;
+		std::strncpy(pendingDefaultUrl_, def.c_str(), sizeof(pendingDefaultUrl_) - 1);
+		pendingDefaultUrl_[sizeof(pendingDefaultUrl_) - 1] = '\0';
+	}
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
 	// ── Cancel / Save ─────────────────────────────────────────────────────
 	constexpr float kBw = 80.0f;
 	ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - kBw * 2.0f - 8.0f) * 0.5f + ImGui::GetCursorPosX());
@@ -416,6 +433,7 @@ void AlarmView::renderSettingsDialog_()
 		s.chrome_path						 = pendingChromePath_;
 		s.close_to_tray					 = pendingCloseTray_;
 		s.suppress_minimize_hint = !pendingShowHint_;
+		s.default_youtube_url		 = pendingDefaultUrl_;
 		ctrl_.saveSettings(std::move(s));
 		ImGui::CloseCurrentPopup();
 	}
@@ -509,7 +527,8 @@ void AlarmView::openAddDialog_()
 	// Default: Mon–Fri
 	for (int i = 0; i < 7; i++)
 		editDays_[i] = (i >= 1 && i <= 5);
-	editUrl_[0] = '\0';
+	std::strncpy(editUrl_, ctrl_.settings().default_youtube_url.c_str(), sizeof(editUrl_) - 1);
+	editUrl_[sizeof(editUrl_) - 1] = '\0';
 	editError_.clear();
 	showEditDialog_ = true;
 }

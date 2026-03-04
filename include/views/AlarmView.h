@@ -36,8 +36,9 @@ private:
 	// ── Settings dialog ───────────────────────────────────────────────────────
 	bool showSettingsDialog_ = false;
 	std::string pendingChromePath_;
-	bool pendingCloseTray_ = true;
-	bool pendingShowHint_	 = true;
+	bool pendingCloseTray_					 = true;
+	bool pendingShowHint_						 = true;
+	char pendingDefaultUrl_[1024]	 = {};
 
 	// ── Delete confirm ────────────────────────────────────────────────────────
 	std::string pendingDeleteId_;
