@@ -442,7 +442,7 @@ void AlarmView::renderCleanConfirm_()
 
 	ImGui::Text("Clean All Alarms?");
 	ImGui::Spacing();
-	ImGui::TextWrapped("This will delete all alarms from this app and remove every task inside the \\Alarm\\ folder in "
+	ImGui::TextWrapped("This will delete all alarms from this app and remove every task inside the \\MokaAlarm\\ folder in "
 										 "Windows Task Scheduler, including any tasks not shown here due to data corruption.");
 	ImGui::Spacing();
 	ImGui::Separator();

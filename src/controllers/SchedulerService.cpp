@@ -102,7 +102,7 @@ std::wstring taskNameFor(const std::string &label, const std::string &id)
 	return toWide(prefix + " " + id);
 }
 
-// Opens the \Alarm task folder, creating it if it does not exist.
+// Opens the \MokaAlarm task folder, creating it if it does not exist.
 HRESULT getOrCreateAlarmFolder(ITaskService *svc, ITaskFolder **alarmFolder)
 {
 	ComPtr<ITaskFolder> root;

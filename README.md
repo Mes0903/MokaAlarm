@@ -1,4 +1,4 @@
-# Alarm
+# MokaAlarm
 
 A Windows desktop alarm application built with C++23, Dear ImGui, and Vulkan.
 
@@ -30,7 +30,7 @@ Notes:
 ## Project Structure
 
 ```
-Alarm/
+MokaAlarm/
 ├── include/
 │   ├── Application.h
 │   ├── models/
@@ -122,7 +122,7 @@ AlarmController
 ├── updateAlarm(): finds by id, overwrites, sorts, persists, syncs scheduler
 ├── deleteAlarm(): removes scheduler task, removes by id, persists
 ├── setEnabled(): flips enabled flag, persists, syncs scheduler
-├── cleanAll(): deletes all tasks in \Alarm\ folder, clears list, persists
+├── cleanAll(): deletes all tasks in \MokaAlarm\ folder, clears list, persists
 ├── settings(): read-only access to settings
 └── saveSettings(): replaces settings, persists
 ```
