@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
 namespace alarm::view {
 
@@ -240,16 +241,16 @@ void AlarmView::renderEditDialog_()
 	ImGui::SetNextItemWidth(64.0f);
 	ImGui::InputScalar("##hr", ImGuiDataType_S32, &editHour_, nullptr, nullptr, "%02d");
 	if (ImGui::IsItemHovered())
-		editHour_ += static_cast<int>(ImGui::GetIO().MouseWheel);
-	editHour_ = std::clamp(editHour_, 0, 23);
+		editHour_ -= static_cast<int>(ImGui::GetIO().MouseWheel);
+	editHour_ = ((editHour_ % 24) + 24) % 24;
 	ImGui::SameLine(0, 4);
 	ImGui::TextUnformatted(":");
 	ImGui::SameLine(0, 4);
 	ImGui::SetNextItemWidth(64.0f);
 	ImGui::InputScalar("##mn", ImGuiDataType_S32, &editMinute_, nullptr, nullptr, "%02d");
 	if (ImGui::IsItemHovered())
-		editMinute_ += static_cast<int>(ImGui::GetIO().MouseWheel);
-	editMinute_ = std::clamp(editMinute_, 0, 59);
+		editMinute_ -= static_cast<int>(ImGui::GetIO().MouseWheel);
+	editMinute_ = ((editMinute_ % 60) + 60) % 60;
 
 	// Repeat days
 	ImGui::Spacing();
@@ -522,8 +523,10 @@ void AlarmView::openAddDialog_()
 	isAddMode_ = true;
 	editId_.clear();
 	editLabel_[0] = '\0';
-	editHour_			= 9;
-	editMinute_		= 0;
+	const std::time_t now = std::time(nullptr);
+	const std::tm *lt		 = std::localtime(&now);
+	editHour_							= lt->tm_hour;
+	editMinute_						= lt->tm_min;
 	// Default: Mon–Fri
 	for (int i = 0; i < 7; i++)
 		editDays_[i] = (i >= 1 && i <= 5);
