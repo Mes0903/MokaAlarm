@@ -48,7 +48,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 	${PROJECT_SOURCE_DIR}/include
 	${THIRD_DIR}/imgui
 	${THIRD_DIR}/imgui/backends
-	${THIRD_DIR}/ImGuiFileDialog
 	${THIRD_DIR}/json/single_include
 	${Vulkan_INCLUDE_DIRS}
 )
@@ -56,7 +55,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # ─── Link ────────────────────────────────────────────────────────────────────
 target_link_libraries(${PROJECT_NAME} PRIVATE
 	IMGUI_LIB
-	ImGuiFileDialog
 	${Vulkan_LIBRARIES}
 	comdlg32
 	ole32
