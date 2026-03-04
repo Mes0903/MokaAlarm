@@ -22,7 +22,3 @@ target_include_directories(IMGUI_LIB PUBLIC
 
 target_compile_definitions(IMGUI_LIB PUBLIC VK_USE_PLATFORM_WIN32_KHR)
 target_link_libraries(IMGUI_LIB PUBLIC ${Vulkan_LIBRARIES})
-
-# ─── ImGuiFileDialog ─────────────────────────────────────────────────────────
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/ImGuiFileDialog)
-target_link_libraries(ImGuiFileDialog PUBLIC IMGUI_LIB)
