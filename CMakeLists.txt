@@ -58,11 +58,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	IMGUI_LIB
 	ImGuiFileDialog
 	${Vulkan_LIBRARIES}
+	comdlg32
 )
 
 # ─── Copy data/ to build dir ─────────────────────────────────────────────────
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E make_directory
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+		${PROJECT_SOURCE_DIR}/data
 		$<TARGET_FILE_DIR:${PROJECT_NAME}>/data
-	COMMENT "Ensuring data/ directory exists in build output"
+	COMMENT "Copying data/ to build output"
 )

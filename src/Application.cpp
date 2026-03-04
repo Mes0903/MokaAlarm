@@ -1,5 +1,8 @@
 #include "Application.h"
 
+#include "controllers/AlarmController.h"
+#include "imgui_impl_win32.h"
+#include "views/AlarmView.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -15,6 +18,10 @@ constexpr int INIT_W							 = 1280;
 constexpr int INIT_H							 = 800;
 } // namespace
 
+// ─── Constructor / Destructor (defined here so unique_ptr member can see complete types) ─
+Application::Application()	= default;
+Application::~Application() = default;
+
 // ─── Static WndProc dispatch ─────────────────────────────────────────────────
 Application *g_App = nullptr;
 
@@ -28,11 +35,23 @@ static LRESULT WINAPI WndProcDispatch(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 // ─── run ─────────────────────────────────────────────────────────────────────
 int Application::run()
 {
+	// Load settings first so initWindow_ can use the saved window size.
+	ctrl_ = std::make_unique<alarm::controller::AlarmController>();
+	ctrl_->load();
+
 	initWindow_();
 	initVulkan_();
 	initImGui_();
+
+	view_ = std::make_unique<alarm::view::AlarmView>(*ctrl_);
+
 	initTray_();
 	mainLoop_();
+
+	// Release alarm subsystem before ImGui/Vulkan teardown
+	view_.reset();
+	ctrl_.reset();
+
 	cleanup_();
 	return 0;
 }
@@ -50,15 +69,26 @@ void Application::initWindow_()
 	wc_.lpszClassName = WND_CLASS;
 	::RegisterClassExW(&wc_);
 
-	hwnd_ =
-			::CreateWindowExW(0, WND_CLASS, APP_NAME, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, INIT_W, INIT_H, nullptr, nullptr, wc_.hInstance, nullptr);
+	const auto &savedSize = ctrl_->settings();
+	hwnd_									= ::CreateWindowExW(0,
+														WND_CLASS,
+														APP_NAME,
+														WS_OVERLAPPEDWINDOW,
+														CW_USEDEFAULT,
+														CW_USEDEFAULT,
+														savedSize.window_width,
+														savedSize.window_height,
+														nullptr,
+														nullptr,
+														wc_.hInstance,
+														nullptr);
 
 	::ShowWindow(hwnd_, SW_SHOWDEFAULT);
 	::UpdateWindow(hwnd_);
 }
 
 // ─── Vulkan helpers ──────────────────────────────────────────────────────────
-void Application::checkVkResult_(VkResult err)
+void Application::checkVkResult_(VkResult err) noexcept
 {
 	if (err == VK_SUCCESS)
 		return;
@@ -67,7 +97,7 @@ void Application::checkVkResult_(VkResult err)
 		abort();
 }
 
-bool Application::isExtensionAvailable_(const ImVector<VkExtensionProperties> &props, const char *name)
+bool Application::isExtensionAvailable_(const ImVector<VkExtensionProperties> &props, const char *name) noexcept
 {
 	for (const auto &p : props)
 		if (strcmp(p.extensionName, name) == 0)
@@ -112,17 +142,25 @@ void Application::initVulkan_()
 
 #ifdef APP_USE_VULKAN_DEBUG_REPORT
 	// Register debug report callback.
-	static auto debugCallback = [](VkDebugReportFlagsEXT, VkDebugReportObjectTypeEXT, uint64_t, size_t, int32_t, const char *, const char *msg,
+	static auto debugCallback = [](VkDebugReportFlagsEXT,
+																 VkDebugReportObjectTypeEXT,
+																 uint64_t,
+																 size_t,
+																 int32_t,
+																 const char *,
+																 const char *msg,
 																 void *) -> VkBool32 {
 		fprintf(stderr, "[vulkan] %s\n", msg);
 		return VK_FALSE;
 	};
-	auto fnCreate = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(instance_, "vkCreateDebugReportCallbackEXT"));
+	auto fnCreate = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(
+			vkGetInstanceProcAddr(instance_, "vkCreateDebugReportCallbackEXT"));
 	if (fnCreate) {
 		VkDebugReportCallbackCreateInfoEXT dbgCI = {};
 		dbgCI.sType															 = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-		dbgCI.flags															 = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-		dbgCI.pfnCallback												 = debugCallback;
+		dbgCI.flags =
+				VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
+		dbgCI.pfnCallback = debugCallback;
 		fnCreate(instance_, &dbgCI, allocator_, &debugReport_);
 	}
 #endif
@@ -155,7 +193,8 @@ void Application::initVulkan_()
 
 	// Create descriptor pool.
 	{
-		VkDescriptorPoolSize poolSz				= {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE};
+		VkDescriptorPoolSize poolSz				= {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+																				 IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE};
 		VkDescriptorPoolCreateInfo poolCI = {};
 		poolCI.sType											= VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		poolCI.flags											= VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -200,13 +239,14 @@ void Application::setupVulkanWindow_(VkSurfaceKHR surface, int w, int h)
 			VK_FORMAT_B8G8R8_UNORM,
 			VK_FORMAT_R8G8B8_UNORM,
 	};
-	wndData_.SurfaceFormat =
-			ImGui_ImplVulkanH_SelectSurfaceFormat(physDev_, surface, requestFmts, static_cast<int>(IM_COUNTOF(requestFmts)), VK_COLORSPACE_SRGB_NONLINEAR_KHR);
+	wndData_.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(
+			physDev_, surface, requestFmts, static_cast<int>(IM_COUNTOF(requestFmts)), VK_COLORSPACE_SRGB_NONLINEAR_KHR);
 
 	VkPresentModeKHR presentModes[] = {VK_PRESENT_MODE_FIFO_KHR};
-	wndData_.PresentMode						= ImGui_ImplVulkanH_SelectPresentMode(physDev_, surface, presentModes, IM_COUNTOF(presentModes));
+	wndData_.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(physDev_, surface, presentModes, IM_COUNTOF(presentModes));
 
-	ImGui_ImplVulkanH_CreateOrResizeWindow(instance_, physDev_, device_, &wndData_, queueFamily_, allocator_, w, h, minImageCount_, 0);
+	ImGui_ImplVulkanH_CreateOrResizeWindow(
+			instance_, physDev_, device_, &wndData_, queueFamily_, allocator_, w, h, minImageCount_, 0);
 }
 
 // ─── initImGui_ ──────────────────────────────────────────────────────────────
@@ -216,6 +256,12 @@ void Application::initImGui_()
 	ImGui::CreateContext();
 	ImGuiIO &io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+	// Load a font that covers CJK characters.
+	// Microsoft JhengHei (Traditional Chinese) ships with every Windows 7+.
+	// Fall back to the built-in Proggy font if the file is missing.
+	if (!io.Fonts->AddFontFromFileTTF("data/msjh.ttc", 18.0f, nullptr, io.Fonts->GetGlyphRangesChineseFull()))
+		io.Fonts->AddFontDefault();
 
 	ImGui::StyleColorsDark();
 
@@ -276,7 +322,8 @@ void Application::mainLoop_()
 			int h = r.bottom - r.top;
 			if (w > 0 && h > 0) {
 				ImGui_ImplVulkan_SetMinImageCount(minImageCount_);
-				ImGui_ImplVulkanH_CreateOrResizeWindow(instance_, physDev_, device_, &wndData_, queueFamily_, allocator_, w, h, minImageCount_, 0);
+				ImGui_ImplVulkanH_CreateOrResizeWindow(
+						instance_, physDev_, device_, &wndData_, queueFamily_, allocator_, w, h, minImageCount_, 0);
 				wndData_.FrameIndex = 0;
 				swapChainRebuild_		= false;
 			}
@@ -291,8 +338,35 @@ void Application::mainLoop_()
 		ImGui_ImplWin32_NewFrame();
 		ImGui::NewFrame();
 
-		// ── UI content (Phase 1 placeholder) ────────────────────────────
-		ImGui::ShowDemoWindow();
+		// ── UI content ───────────────────────────────────────────────────
+		view_->render();
+
+		// ── Handle window resize request from Settings ────────────────────
+		{
+			int rw, rh;
+			if (view_->pollWindowResize(rw, rh)) {
+				RECT rc = {0, 0, rw, rh};
+				::AdjustWindowRectEx(&rc,
+														 static_cast<DWORD>(::GetWindowLongW(hwnd_, GWL_STYLE)),
+														 FALSE,
+														 static_cast<DWORD>(::GetWindowLongW(hwnd_, GWL_EXSTYLE)));
+				::SetWindowPos(hwnd_, nullptr, 0, 0, rc.right - rc.left, rc.bottom - rc.top, SWP_NOMOVE | SWP_NOZORDER);
+			}
+		}
+
+		// ── Handle close decision from hint dialog ────────────────────────
+		using CD = alarm::view::AlarmView::CloseDecision;
+		switch (view_->pollCloseDecision()) {
+		case CD::Minimize:
+			setWindowVisible_(false);
+			break;
+		case CD::Exit:
+			running_ = false;
+			::PostQuitMessage(0);
+			break;
+		default:
+			break;
+		}
 
 		// ── Render ───────────────────────────────────────────────────────
 		ImGui::Render();
@@ -312,7 +386,8 @@ void Application::frameRender_(ImDrawData *draw)
 	VkSemaphore acqSem	= wndData_.FrameSemaphores[wndData_.SemaphoreIndex].ImageAcquiredSemaphore;
 	VkSemaphore rendSem = wndData_.FrameSemaphores[wndData_.SemaphoreIndex].RenderCompleteSemaphore;
 
-	VkResult err = vkAcquireNextImageKHR(device_, wndData_.Swapchain, UINT64_MAX, acqSem, VK_NULL_HANDLE, &wndData_.FrameIndex);
+	VkResult err =
+			vkAcquireNextImageKHR(device_, wndData_.Swapchain, UINT64_MAX, acqSem, VK_NULL_HANDLE, &wndData_.FrameIndex);
 	if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
 		swapChainRebuild_ = true;
 		return;
@@ -404,11 +479,15 @@ void Application::showTrayMenu_()
 }
 
 // ─── setWindowVisible_ ───────────────────────────────────────────────────────
-void Application::setWindowVisible_(bool v)
+void Application::setWindowVisible_(bool v) noexcept
 {
 	windowVisible_ = v;
 	::ShowWindow(hwnd_, v ? SW_SHOW : SW_HIDE);
 }
+
+// Explicit redeclaration: MSVC somehow loses the extern from imgui_impl_win32.h
+// when large headers (nlohmann/json) are included between Application.h and this point.
+extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // ─── handleMessage ───────────────────────────────────────────────────────────
 LRESULT Application::handleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -417,6 +496,24 @@ LRESULT Application::handleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 		return true;
 
 	switch (msg) {
+	case WM_SHOWWINDOW:
+		// Sync our flag when the window is shown/hidden externally
+		// (e.g. a second instance calling ShowWindow on our HWND).
+		windowVisible_ = (wp != 0);
+		break;
+
+	case WM_EXITSIZEMOVE:
+		// Auto-save window size after the user finishes resizing/moving.
+		if (ctrl_) {
+			RECT r;
+			::GetWindowRect(hwnd_, &r);
+			auto s					= ctrl_->settings();
+			s.window_width	= r.right - r.left;
+			s.window_height = r.bottom - r.top;
+			ctrl_->saveSettings(std::move(s));
+		}
+		break;
+
 	case WM_SIZE:
 		if (device_ != VK_NULL_HANDLE && wp != SIZE_MINIMIZED) {
 			int w = static_cast<int>(LOWORD(lp));
@@ -433,8 +530,22 @@ LRESULT Application::handleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 		break;
 
 	case WM_CLOSE:
-		// Hide to tray instead of destroying the window.
-		setWindowVisible_(false);
+		if (view_) {
+			const auto &s = ctrl_->settings();
+			if (!s.close_to_tray) {
+				running_ = false;
+				::PostQuitMessage(0);
+			}
+			else if (s.suppress_minimize_hint) {
+				setWindowVisible_(false);
+			}
+			else {
+				view_->triggerCloseHint();
+			}
+		}
+		else {
+			setWindowVisible_(false);
+		}
 		return 0;
 
 	case WM_TRAYICON:
@@ -462,7 +573,8 @@ void Application::cleanupVulkan_()
 	vkDestroyDescriptorPool(device_, descriptorPool_, allocator_);
 
 #ifdef APP_USE_VULKAN_DEBUG_REPORT
-	auto fnDestroy = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(vkGetInstanceProcAddr(instance_, "vkDestroyDebugReportCallbackEXT"));
+	auto fnDestroy = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(
+			vkGetInstanceProcAddr(instance_, "vkDestroyDebugReportCallbackEXT"));
 	if (fnDestroy && debugReport_ != VK_NULL_HANDLE)
 		fnDestroy(instance_, debugReport_, allocator_);
 #endif

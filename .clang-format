@@ -2,14 +2,15 @@
 Language: Cpp
 BasedOnStyle: LLVM
 AlwaysBreakTemplateDeclarations: Yes
-ColumnLimit: 160
+ColumnLimit: 120
+BinPackArguments: false
 SpaceAfterTemplateKeyword: true
 Standard: c++20
 TabWidth: 2
 IndentWidth: 2
 UseTab: Always
 IndentRequires: true
-SortIncludes: true
+SortIncludes: false
 IncludeBlocks: Regroup
 IncludeCategories:
   - Regex: '^[<"][^">]*\.(hpp|h)[">]$'
